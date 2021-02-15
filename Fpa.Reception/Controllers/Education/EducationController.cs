@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using reception.fitnesspro.ru.Controllers.Teacher;
 using Service.lC;
+using Service.MongoDB;
 
 namespace reception.fitnesspro.ru.Controllers.Education
 {
@@ -213,6 +214,16 @@ namespace reception.fitnesspro.ru.Controllers.Education
             return Ok();
         }
 
+
+        [HttpGet]
+        [Route("Limit")]
+        public async Task<ActionResult> Limit()
+        {
+
+
+            return Ok();
+        }
+
         public class LimitViewModel
         {
             public Guid ProgramKey { get; set; }
@@ -221,7 +232,5 @@ namespace reception.fitnesspro.ru.Controllers.Education
             public int AllowedAttempCount { get; set; }
         }
 
-
-        
     }
 }

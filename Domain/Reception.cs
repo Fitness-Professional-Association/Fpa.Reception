@@ -8,19 +8,34 @@ namespace Domain
         public Guid Key { get; set; }
         public bool IsActive { get; set; }
         public DateTime Date { get; set; }
-        public IEnumerable<Payload> Payload { get; set; } = new List<Payload>();
         public PositionManager PositionManager { get; set; }
+
+        public List<Event> Events { get; set; } = new List<Event>();
+
         public List<History> Histories { get; set; } = new List<History>();
+
+        public TConverted ConvertToType<TConverted>(Func<Reception, TConverted> function )
+        {
+            var result = function(this);
+
+            return result;
+        }
+
+        public Reception ConvertFromType<TConverted>(Func<TConverted, Reception> function, TConverted item)
+        {
+            var result = function(item);
+
+            return result;
+        }
     }
 
     public class PositionManager
     {
-        PositionType limitType;
-        public PositionManager(PositionType limitType)
+        public PositionType LimitType;
+        public PositionManager()
         {
-            this.limitType = limitType;
         }
-        public IEnumerable<Position> Positions { get; set; } = new List<Position>();
+        public List<Position> Positions { get; set; } = new List<Position>();
     }
 
     public enum PositionType
@@ -31,33 +46,33 @@ namespace Domain
     }
 
 
-    public class Payload
+    public class Event
     {
-        public IEnumerable<BaseInfo> Teachers { get; set; } = new List<BaseInfo>();
+        public List<BaseInfo> Teachers { get; set; } = new List<BaseInfo>();
         public BaseInfo Discipline { get; set; }
-        public IEnumerable<PayloadBound> Bound { get; set; } = new List<PayloadBound>();
-        public PayloadConstrait Constrait { get; set; }
+        public List<PayloadRestriction> Restrictions { get; set; } = new List<PayloadRestriction>();
+        public PayloadRequirement Requirement { get; set; }
     }
 
-    public class PayloadConstrait
+    public class PayloadRequirement
     {
         public DateTime SubscribeBefore { get; set; } = default;
         public DateTime UnsubscribeBefore { get; set; } = default;
 
-        public IEnumerable<Guid> DependsOnOtherDiscipline { get; set; } = new List<Guid>();
-        public int AllowedAttempCount { get; set; }
+        public IEnumerable<Guid> DependsOnOtherDisciplines { get; set; } = new List<Guid>();
+        public int AllowedAttemptCount { get; set; }
     }
 
-    public class PayloadBound
+    public class PayloadRestriction
     {
         public Guid Program { get; set; }
         public Guid Group { get; set; }
         public Guid SubGroup { get; set; }
 
-        public PayloadRules Rules { get; set; }
+        public PayloadOption Option { get; set; }
     }
 
-    public class PayloadRules
+    public class PayloadOption
     {
         public bool CheckContractExpired { get; set; } = true;
         public bool CheckDependings { get; set; } = true;

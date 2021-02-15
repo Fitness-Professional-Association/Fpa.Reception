@@ -1,87 +1,29 @@
-﻿using Application.ReceptionComponent;
-using Application.ReceptionComponent.Converter;
+﻿using Application.ReceptionComponent.Converter;
 using Domain;
-using Mapster;
-using Microsoft.AspNetCore.Mvc;
-using reception.fitnesspro.ru.Controllers.Reception.Converter;
-using reception.fitnesspro.ru.Controllers.Reception.ViewModel;
-using reception.fitnesspro.ru.ViewModel;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 using Service.MongoDB;
 using Service.MongoDB.Model;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace reception.fitnesspro.ru.Controllers.Reception
+namespace SandBox
 {
-    [Route("[controller]")]
-    [ApiController]
-    public class ReceptionController : ControllerBase
+    public class Program
     {
-        IMongoRepository<Service.MongoDB.Model.Reception> database;
-
-        ReceptionComponent receptionComponent;
-
-        public ReceptionController(IMongoRepository<Service.MongoDB.Model.Reception> mongodb)
+        static async Task Main(string[] args)
         {
-            this.database = mongodb;
-            this.receptionComponent = new ReceptionComponent(database);
-        }
+            var settings = new MongoDbSettings()
+            {
+                ConnectionString = "mongodb://localhost:7010",
+                DatabaseName = "Reception"
+            };
 
+            var mongo = new MongoRepository<Service.MongoDB.Model.Reception>(settings);
 
-        [HttpGet]
-        public async Task<ActionResult> Get()
-        {
-            var result = receptionComponent.GetAll();
-
-            var domain = result.Select(x => new Domain.Reception().ConvertFromType(ReceptionConverter.ConvertMongoToDomain, x));
-
-            var viewmodel = domain.Select(x => ReceptionViewModelConverter.ConvertDomainViewModel(x));
-
-            return Ok(viewmodel);
-        }
-
-        [HttpPost]
-        public async Task<ActionResult> Post(CreateReceptionViewModel model)
-        {
-            if (ModelState.IsValid == false) return BadRequest(model);
-
-            var item = new Domain.Reception().ConvertFromType(ReceptionViewModelConverter.ConvertViewModelToDomain, model);
-
-            receptionComponent.StoreReception(item);
-
-            return Ok(item);
-        }
-
-
-        [HttpGet]
-        [Route("FindByDiscipline")]
-        public async Task<ActionResult> FindByDiscipline(Guid key)
-        {
-            var result = receptionComponent.GetReceptionByDisciplineKey(key);
-
-            var domain = result.Select(x => new Domain.Reception().ConvertFromType(ReceptionConverter.ConvertMongoToDomain, x));
-
-            var viewmodel = domain.Select(x => ReceptionViewModelConverter.ConvertDomainViewModel(x));
-
-            return Ok(viewmodel);
-        }
-
-        [HttpGet]
-        [Route("FindByTeacher")]
-        public async Task<ActionResult> FindByTeacher(Guid key)
-        {
-            var result = receptionComponent.GetReceptionByTeacherKey(key);
-
-            return Ok(result.Adapt<IEnumerable<Domain.Reception>>());
-        }
-
-
-
-
-        public Domain.Reception CreateReception()
-        {
             var item = new Domain.Reception
             {
                 Date = DateTime.Now,
@@ -128,7 +70,7 @@ namespace reception.fitnesspro.ru.Controllers.Reception
                      },
                 PositionManager = new Domain.PositionManager()
                 {
-                    Positions = new List<Domain.Position>
+                    Positions = new List<Domain.Position> 
                     {
                         new Domain.Position{
                         Key = Guid.NewGuid(),
@@ -152,9 +94,40 @@ namespace reception.fitnesspro.ru.Controllers.Reception
             };
 
 
-            return item;
 
+            var dto = item.ConvertToType(ReceptionConverter.ConvertToMongoDto);
+
+
+            await mongo.InsertOneAsync(dto);
+
+            Console.WriteLine("Hello World!");
         }
+
     }
 
+    [BsonIgnoreExtraElements]
+    [BsonCollection("Receptions")]
+    public class ReceptionDto1 : IDocument
+    {
+        [BsonId]
+        [BsonRepresentation(BsonType.String)]
+        public ObjectId Id { get; set; }
+        public DateTime CreatedAt { get; }
+
+        public bool Active { get; set; }
+
+        public Tps Enum { get; set; }
+
+        public Type MyProperty { get; set; }
+
+        public Tuple<int, int> Tuple { get; set; }
+    }
+
+    public enum Tps
+    {
+        one,
+        two,
+        three
+    }
 }
+

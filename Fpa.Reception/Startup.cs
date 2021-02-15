@@ -1,20 +1,15 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.OpenApi.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http.Headers;
-using System.Threading.Tasks;
-using Application.HttpClient;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using MongoDB.Bson;
 using reception.fitnesspro.ru.Misc;
+using Service.MongoDB;
+using System;
 
 namespace reception.fitnesspro.ru
 {
@@ -32,8 +27,16 @@ namespace reception.fitnesspro.ru
         {
             HttpClientLibrary.AddHttpClients(services, Configuration);
 
+            BsonDefaults.GuidRepresentation = GuidRepresentation.Standard;
+
+            services.Configure<MongoDbSettings>(Configuration.GetSection("MongoDbSettings"));
+            services.AddSingleton<IMongoDbSettings>(serviceProvider =>
+                serviceProvider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
+
+            services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>));
+
             services.AddControllers();
-                
+
 
             services.AddAuthentication("Bearer")
                 .AddJwtBearer("Bearer", options =>
