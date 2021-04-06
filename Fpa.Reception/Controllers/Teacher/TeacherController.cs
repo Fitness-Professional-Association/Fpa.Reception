@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Application.Extensions;
 using Application.HttpClient;
 using Domain;
+using Domain.Interface;
 
 namespace reception.fitnesspro.ru.Controllers.Teacher
 {
@@ -17,6 +18,8 @@ namespace reception.fitnesspro.ru.Controllers.Teacher
     [Route("[controller]")]
     public class TeacherController : ControllerBase
     {
+        private readonly IAppContext context;
+
         private EmployeeHttpClient employeeHttpClient;
         private ProgramHttpClient programHttpClient;
         private readonly AssignHttpClient assignHttpClient;
@@ -28,6 +31,7 @@ namespace reception.fitnesspro.ru.Controllers.Teacher
         EmployeeMethods employeeAction;
 
         public TeacherController(
+            IAppContext context,
             EmployeeHttpClient employeeHttpClient,
             ProgramHttpClient programHttpClient,
             AssignHttpClient assignHttpClient,
@@ -35,6 +39,7 @@ namespace reception.fitnesspro.ru.Controllers.Teacher
             EducationFormHttpClient educationFormHttpClient,
             ControlTypeHttpClient controlTypeHttpClient)
         {
+            this.context = context;
             this.employeeHttpClient = employeeHttpClient;
             this.programHttpClient = programHttpClient;
             this.assignHttpClient = assignHttpClient;
@@ -47,76 +52,82 @@ namespace reception.fitnesspro.ru.Controllers.Teacher
         }
 
         /// <summary>
-        /// Get teacher info by key
+        /// Get information in which programs and disciplines the teacher is invoved in
         /// </summary>
-        /// <param name="keys">Method takes an array of teachers guids</param>
+        /// <param name="key">Method takes a key of employee</param>
         /// <returns></returns>
         [HttpGet]
-        [Route("GetByKeys")]
-        public async Task<ActionResult<dynamic>> GetByKeys([FromBody] IEnumerable<Guid> keys)
+        [Route("GetEducation")]
+        public async Task<ActionResult<IEnumerable<Domain.Education.Program>>> GetEducation([FromQuery]Guid key)
         {
-            var client = new HttpClient();
-            client.BaseAddress = new Uri(@"http://localhost:6400/");
+            var programs = await context.Teacher.GetEducation(key);
 
-            var request = await client.GetAsync("/Employee/GetByKeys", keys).ConfigureAwait(false);
+            if(programs.IsNullOrEmpty()) programs = await context.Education.GetAllPrograms();
 
-            var result = await request.Content.ReadAsStringAsync();
+            if (programs.IsNullOrEmpty()) return NotFound();
 
-            return result;
+            return programs.ToList();
         }
+
 
         [HttpGet]
-        [Route("GetAll")]
-        public async Task<ActionResult<dynamic>> GetAll()
+        [Route("GetReception")]
+        public async Task<dynamic> GetReception([FromQuery] Guid key)
         {
-            var client = new HttpClient();
-            client.BaseAddress = new Uri(@"http://localhost:6400/");
+            // Get Reception
+            // Get Discipline Title
+            // Get Students person Title
+            // Get Students Program Title
 
-            var request = await client.GetAsync("/Employee/GetAll").ConfigureAwait(false);
 
-            var result = await request.Content.ReadAsStringAsync();
+            var reception = context.Reception.Get(key);
+            if (reception == default) return BadRequest(nameof(key));
 
-            return result;
+            var discipline = (await context.Education.GetDisciplinesByKeys(reception.Events.Select(x=>x.Discipline.Key))).ToList();
+
+            var studentsKeys = reception.PositionManager.Positions
+                .Where(x => x.Record != default && x.Record.StudentKey != default)
+                .Select(x => x.Record.StudentKey);
+
+            var students = (await context.Student.GetByKeys(studentsKeys)).ToList();
+
+            var persons = (await context.Person.GetByStudent(studentsKeys)).ToList();
+
+            var programsKeys = reception.PositionManager.Positions
+                .Where(x => x.Record != default && x.Record.StudentKey != default && x.Record.ProgramKey != default)
+                .Select(x => x.Record.ProgramKey);
+
+            var programs = (await context.Education.GetProgramsByKeys(programsKeys)).ToList();
+
+            var vm = new {
+                Discipline = discipline.FirstOrDefault(),
+                Date = reception.Date,
+                Position = reception.PositionManager.Positions
+                                                    .Where(x=>x != default && x.Record != default)
+                                                    .Select(x => GetTimeViewModel(x))
+            };
+
+            return vm;
+
+            dynamic GetTimeViewModel(Position position)
+            {
+                var student = students.FirstOrDefault(x => x.Key == position.Record.StudentKey);
+                var person = persons.FirstOrDefault(x => x.Key == student.Owner);
+
+                var program = programs.FirstOrDefault(x => x.Key == position.Record.ProgramKey);
+
+                return new
+                {
+                    Time = position.Time,
+                    Student = new { Title = person.Title, Key = student.Key },
+                    Program = new { Title = program.Title, Key = program.Key },
+                    PositionKey = position.Key
+                };
+            }
         }
 
-        /// <summary>
-        /// Get a teacher for certain person by a guid of person
-        /// </summary>
-        /// <param name="keys">Method takes an array of persons guids</param>
-        /// <returns>Ienumerable string</returns>
-        [HttpGet]
-        [Route("GetByPersonKeys")]
-        [Produces("application/json")]
 
-        public async Task<ActionResult<dynamic>> GetByPersonKey([FromBody] IEnumerable<Guid> keys)
-        {
-            var client = new HttpClient();
-            client.BaseAddress = new Uri(@"http://localhost:6400/");
 
-            var request = await client.GetAsync("/Employee/GetByPersonKeys", keys).ConfigureAwait(false);
-
-            var result = await request.Content.ReadAsStringAsync();
-
-            return result;
-        }
-
-        ///// <summary>
-        ///// Get an information which program and discipline teacher involved in
-        ///// </summary>
-        ///// <param name="keys">Method takes an array of emplyee guids</param>
-        ///// <returns></returns>
-        //[HttpGet]
-        //[Route("Disciplines")]
-        //public async Task<ActionResult<GetDisciplinesViewModel>> GetDisciplines(IEnumerable<Guid> keys)
-        //{
-        //    var orders = await employeeAction.GetDisciplines(keys);
-
-        //    var programs = await programAction.GetByDiscipline(orders.SelectMany(x=>x.Disciplines));
-
-        //    var viewModel = new GetDisciplinesViewModel(orders, programs).Create();
-
-        //    return viewModel;
-        //}
 
 
         [HttpGet]
@@ -186,5 +197,7 @@ namespace reception.fitnesspro.ru.Controllers.Teacher
 
             return res.ToList();
         }
+
+
     }
 }

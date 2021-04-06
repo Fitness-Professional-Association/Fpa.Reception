@@ -1,5 +1,6 @@
 ﻿using lc.fitnesspro.library.Interface;
 using lc.fitnesspro.library.Model;
+using Service.lC.Dto;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -102,12 +103,14 @@ namespace Service.lC
 
             if (result == null || result.Any() == false) return Enumerable.Empty<GroupDto>();
 
-            var groups = result.Select(x => new GroupDto { 
-                Key = x.Key, 
-                Title = x.Title, 
-                ProgramKey = x.ProgramKey, 
-                Start = x.Start, 
-                Finish = x.Finish });
+            var groups = result.Select(x => new GroupDto
+            {
+                Key = x.Key,
+                Title = x.Title,
+                ProgramKey = x.ProgramKey,
+                Start = x.Start,
+                Finish = x.Finish
+            });
 
             return groups ?? Enumerable.Empty<GroupDto>();
         }
@@ -146,19 +149,12 @@ namespace Service.lC
         public string Title { get; set; }
     }
 
-    public class GroupDto
-    {
-        public Guid Key { get; set; }
-        public string Title { get; set; }
-        public Guid ProgramKey { get; set; }
-        public DateTime Start { get; set; }
-        public DateTime Finish { get; set; }
-    }
 
-    public class SubGroupDto
-    {
-        public Guid Key { get; set; }
-        public string Title { get; set; }
-        public Guid GroupKey { get; set; }
-    }
+
+    //public class SubGroupDto
+    //{
+    //    public Guid Key { get; set; }
+    //    public string Title { get; set; }
+    //    public Guid GroupKey { get; set; }
+    //}
 }

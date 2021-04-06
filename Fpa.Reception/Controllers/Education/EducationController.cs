@@ -1,15 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Application.Component;
 using Application.Employee;
 using Application.HttpClient;
 using Application.Program;
+using Domain.Interface;
 using lc.fitnesspro.library;
+using Mapster;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using reception.fitnesspro.ru.Controllers.Education.ViewModel;
 using reception.fitnesspro.ru.Controllers.Teacher;
 using Service.lC;
+using Service.lC.Provider;
 using Service.MongoDB;
 
 namespace reception.fitnesspro.ru.Controllers.Education
@@ -18,6 +24,8 @@ namespace reception.fitnesspro.ru.Controllers.Education
     [ApiController]
     public class EducationController : ControllerBase
     {
+        private readonly IAppContext context;
+
         private EmployeeHttpClient employeeHttpClient;
         private ProgramHttpClient programHttpClient;
         private readonly AssignHttpClient assignHttpClient;
@@ -29,6 +37,7 @@ namespace reception.fitnesspro.ru.Controllers.Education
         EmployeeMethods employeeAction;
 
         public EducationController(
+            IAppContext context,
             EmployeeHttpClient employeeHttpClient,
             ProgramHttpClient programHttpClient,
             AssignHttpClient assignHttpClient,
@@ -36,6 +45,7 @@ namespace reception.fitnesspro.ru.Controllers.Education
             EducationFormHttpClient educationFormHttpClient,
             ControlTypeHttpClient controlTypeHttpClient)
         {
+            this.context = context;
             this.employeeHttpClient = employeeHttpClient;
             this.programHttpClient = programHttpClient;
             this.assignHttpClient = assignHttpClient;
@@ -133,6 +143,9 @@ namespace reception.fitnesspro.ru.Controllers.Education
                 return BadRequest(ModelState);
             }
 
+            //var prgs = await context.Teacher.GetEducation(key).ConfigureAwait(false);
+            //prgs.ToList();
+
             // get programs with teacher
             var teacherProgramKeys = await client.GetProgramGuidByTeacher(key).ConfigureAwait(false);
 
@@ -186,7 +199,6 @@ namespace reception.fitnesspro.ru.Controllers.Education
             return result.ToList();
         }
 
-
         [HttpGet]
         [Route("Program/FindSiblings")]
         public async Task<ActionResult<EducationStructureViewModel>> FindProgramsWithDisciplineKey(Guid key)
@@ -196,7 +208,7 @@ namespace reception.fitnesspro.ru.Controllers.Education
             var programs = await client.FindSiblings(key);
             if (programs == null || programs.Any() == false) return NoContent();
 
-            var groups = await client.FindProgramGroup(programs.Select(x=>x.Key));
+            var groups = await client.FindProgramGroup(programs.Select(x => x.Key));
 
             var subGroups = await client.FindSubgroups(groups.Select(x=>x.Key));
 
@@ -205,32 +217,13 @@ namespace reception.fitnesspro.ru.Controllers.Education
             return viewModel;
         }
 
-
-
-        [HttpPost]
-        [Route("Limit/Create")]
-        public async Task<ActionResult> CreateLimit([FromBody] LimitViewModel model)
-        {
-            return Ok();
-        }
-
-
         [HttpGet]
-        [Route("Limit")]
-        public async Task<ActionResult> Limit()
+        [Route("Program/FindSiblings2")]
+        public async Task<ActionResult<dynamic>> FindProgramsWithDisciplineKey2(Guid key)
         {
+            var programs = await context.Education.FindByDiscipline(key);
 
-
-            return Ok();
+            return programs.ToList();
         }
-
-        public class LimitViewModel
-        {
-            public Guid ProgramKey { get; set; }
-            public Guid DisciplineKey { get; set; }
-            public IEnumerable<Guid> DependsOnOtherDiscipline { get; set; } = new List<Guid>();
-            public int AllowedAttempCount { get; set; }
-        }
-
     }
 }
