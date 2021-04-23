@@ -1,4 +1,5 @@
 ﻿using Domain.Education;
+using Domain.Model.Education;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -7,10 +8,13 @@ namespace Domain.Interface
 {
     public interface IEducationComponent
     {
-        Task<IEnumerable<Program>> FindByDiscipline(Guid disciplineKey);
-        Task<IEnumerable<Program>> GetAllPrograms();
+        Task<IEnumerable<ControlType>> GetControlTypesByKeys(IEnumerable<Guid> controlTypeKeys);
         Task<IEnumerable<BaseInfo>> GetDisciplinesByKeys(IEnumerable<Guid> disciplineKeys);
-        Task<IEnumerable<BaseInfo>> GetProgramsByKeys(IEnumerable<Guid> programKeys);
+        Task<IEnumerable<Program>> GetProgramsByDiscipline(Guid disciplineKey);
+        Task<IEnumerable<Program>> GetProgramsByKeys(IEnumerable<Guid> programKeys);        
+
         Task<Program> GetStudentEducation(Guid programKey);
+
+        Task<IEnumerable<BaseInfo>> GetRates();
     }
 }

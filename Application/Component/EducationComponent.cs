@@ -1,5 +1,6 @@
 ﻿using Domain;
 using Domain.Interface;
+using Domain.Model.Education;
 using Mapster;
 using Service.lC;
 using System;
@@ -19,28 +20,8 @@ namespace Application.Component
             this.lcService = lcService;
         }
 
-        public async Task<IEnumerable<Domain.Education.Program>> GetAllPrograms()
-        {
-            var programManager = lcService.Program;
-
-            var programs = await programManager.GetAll();
-            await programManager.IncludeDisciplines(programs);
-            await programManager.IncludeEducationForm(programs);
-            await programManager.IncludeTeachers(programs);
-            await programManager.IncludeGroups(programs);
-
-            var groupManager = lcService.Group;
-
-            var groups = programs.SelectMany(x => x.Groups);
-            await groupManager.IncludeSubGroups(groups);
-
-            var domain = programs.Adapt<IEnumerable<Domain.Education.Program>>();
-
-            return domain;
-        }
-
-        public async Task<IEnumerable<Domain.Education.Program>> FindByDiscipline(Guid disciplineKey)
-        {
+        public async Task<IEnumerable<Domain.Education.Program>> GetProgramsByDiscipline(Guid disciplineKey)
+        { 
             var programManager = lcService.Program;
 
             var programs = await programManager.FilterByDiscipline(disciplineKey);
@@ -56,14 +37,7 @@ namespace Application.Component
             return domain;
         }
 
-        public async Task<IEnumerable<BaseInfo>> GetDisciplinesByKeys(IEnumerable<Guid> disciplineKeys)
-        {
-            var disciplines = await lcService.Education.GetDisciplinesByKeys(disciplineKeys);
-
-            return disciplines.Adapt<IEnumerable<BaseInfo>>();
-        }
-
-        public async Task<IEnumerable<BaseInfo>> GetProgramsByKeys(IEnumerable<Guid> programKeys)
+        public async Task<IEnumerable<Domain.Education.Program>> GetProgramsByKeys(IEnumerable<Guid> programKeys)
         {
             var programs = await lcService.Program.GetPrograms(programKeys);
 
@@ -71,6 +45,15 @@ namespace Application.Component
 
             return result;
         }
+
+        public async Task<IEnumerable<BaseInfo>> GetDisciplinesByKeys(IEnumerable<Guid> disciplineKeys)
+        {
+            var disciplines = await lcService.Education.GetDisciplinesByKeys(disciplineKeys);
+
+            return disciplines.Adapt<IEnumerable<BaseInfo>>();
+        }
+
+
 
         public async Task<Domain.Education.Program> GetStudentEducation(Guid programKey)
         {
@@ -80,6 +63,29 @@ namespace Application.Component
             var domain = foundedProgramQuery.Adapt<Domain.Education.Program>();
 
             return domain;
+        }
+
+        public async Task<IEnumerable<ControlType>> GetControlTypesByKeys(IEnumerable<Guid> controlTypeKeys)
+        { 
+            var controlTypes = await lcService.ControlType.GetControlTypesByKeys(controlTypeKeys);
+            //var castedControlTypes = controlTypes.Select(x=> new Service.lC.Model.ControlType{ Key = x.Key, Title = x.Title });
+                await lcService.ControlType.IncludeScoreType(controlTypes);
+
+            var scoreTypes = controlTypes.SelectMany(x=>x.RateType.Select(s=>s.RateKey));
+                await lcService.ControlType.IncludeRateType(scoreTypes);
+
+            var domain = controlTypes.Adapt<IEnumerable<ControlType>>();
+
+            return domain;
+        }
+
+        public async Task<IEnumerable<BaseInfo>> GetRates()
+        {
+            var dto = await lcService.ControlType.GetAllRates();
+
+            var model = dto.Adapt<IEnumerable<BaseInfo>>();
+
+            return model;
         }
     }
 }
