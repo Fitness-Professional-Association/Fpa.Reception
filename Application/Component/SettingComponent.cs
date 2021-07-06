@@ -109,7 +109,7 @@ namespace Application.Component
 
         public async Task<IEnumerable<TeacherSetting>> GetAllTeacherSettings()
         {
-            var settings = await Task.FromResult(database.Settings.Teacher.AsQueryable());
+            var settings = (await Task.FromResult(database.Settings.Teacher.AsQueryable())).ToList();
 
             var result = settings.Adapt<IEnumerable<TeacherSetting>>();
 
@@ -213,6 +213,8 @@ namespace Application.Component
 
         public async Task<GroupSettings> FindGroupSettings(Guid serviceGroupKey)
         {
+            if(serviceGroupKey == default) return null;
+
             var setting = await database.Settings.Group.FindOneAsync(x => x.Group.Key == serviceGroupKey);
 
             var model = setting.Adapt<GroupSettings>();

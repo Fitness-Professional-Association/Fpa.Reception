@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Domain;
 using reception.fitnesspro.ru.ViewModel;
+using Domain.Model;
 
 namespace reception.fitnesspro.ru.Controllers.Student.ViewModel
 {
@@ -41,7 +42,7 @@ namespace reception.fitnesspro.ru.Controllers.Student.ViewModel
 
         public void CheckContractExpired(Contract contract, IEnumerable<BaseConstraint> commonSettings)
         {
-            if(contract == default) CommonRejectReasons.Add("The student`s contract was'nt found");
+            if (contract == default) CommonRejectReasons.Add("The student`s contract was'nt found");
 
             // Срок договора не истек
             if (contract.IsContractExpiredForDay(reception.Date) == false) return;
@@ -65,14 +66,14 @@ namespace reception.fitnesspro.ru.Controllers.Student.ViewModel
             Events.ForEach(x => x.CheckSignUpBefore());
         }
 
-        public void CheckAllowedDisciplinePeriod(Contract contract)
+        public void CheckAllowedDisciplinePeriod(IEnumerable<Domain.GroupSettings.EventPeriodConstraint> settings, Contract contract)
         {
-            Events.ForEach(x => x.CheckAllowedDisciplinePeriod(contract, reception.Date));
+            Events.ForEach(x => x.CheckAllowedDisciplinePeriod(settings, contract, reception.Date));
         }
 
-        public void CheckAttemptsCount(Guid disciplineKey, Guid studentKey, Contract contract, IStudentComponent logic)
+        public void CheckAttemptsCount(Guid disciplineKey, Contract contract, StudentSetting studentSetting)
         {
-            Events.ForEach(async x => await x.CheckAttemptsCount(disciplineKey, studentKey, contract, logic));
+            Events.ForEach(x => x.CheckAttemptsCount(disciplineKey, contract, studentSetting));
         }
 
         public void CheckSignUpDoubles(Guid disciplineKey, Guid studentKey, IStudentComponent logic)
@@ -80,9 +81,9 @@ namespace reception.fitnesspro.ru.Controllers.Student.ViewModel
             Events.ForEach(async x => await x.CheckSignUpDoubles(disciplineKey, studentKey, logic));
         }
 
-        public void CheckDependencies(Guid disciplineKey, Guid studentKey, IReceptionComponent logic)
+        public void CheckDependencies(Guid disciplineKey, Contract contract, IEnumerable<BaseConstraint> constraints, IEnumerable<Position> positions)
         {
-            //Events.ForEach(async x => await x.CheckDependencies(disciplineKey, studentKey, logic));
+            Events.ForEach(x => x.CheckDependencies(disciplineKey, contract, constraints, positions));
         }
 
         public class PositionViewModel
@@ -135,32 +136,56 @@ namespace reception.fitnesspro.ru.Controllers.Student.ViewModel
                 if (@event.CanSignUpBefore(DateTime.Now) == false) EventRejectReasons.Add("The opportunity to register is in the past");
             }
 
-            public void CheckAllowedDisciplinePeriod(Contract contract, DateTime date)
+            public void CheckAllowedDisciplinePeriod(IEnumerable<Domain.GroupSettings.EventPeriodConstraint> settings, Contract contract, DateTime date)
             {
-                // get common limit
-                var commonLimitDays = 5;
+                if (contract == default || (contract.StartEducationDate == default && contract.FinishEducationhDate == default))
+                    EventRejectReasons.Add("The student contract was not defined or the term of study was specified incorrectly");
+
+                var checkAllowingPeriod = true;
 
                 var restriction = @event.GetRestriction(contract.EducationProgram.Key, contract.Group.Key, contract.SubGroup.Key);
-                if (restriction == default || restriction.CheckAllowingPeriod() == false) return;
+                if (restriction != default && restriction.CheckAllowingPeriod() == false) checkAllowingPeriod = false;
 
-                if (contract.IsDateInPeriodFromStart(date, commonLimitDays)) EventRejectReasons.Add("The registration period for the discipline has expired");
+                if (checkAllowingPeriod == false) return;
+
+                var disciplineSetting = settings.FirstOrDefault(x => x.Discipline.Key == this.DisciplineKey);
+
+                if (disciplineSetting == default)
+                {
+                    if (contract.IsContractExpiredForDay(date)) EventRejectReasons.Add("The registration period for the discipline has expired");
+                    return;
+                }
+
+                var startPeriodDate = disciplineSetting.StartPeriod == default ? contract.StartEducationDate : disciplineSetting.StartPeriod;
+                var finishPeriodDate = disciplineSetting.FinishPeriod == default ? contract.FinishEducationhDate : disciplineSetting.FinishPeriod;
+
+                if (startPeriodDate < finishPeriodDate) SwapDate(ref startPeriodDate, ref finishPeriodDate);
+
+                if ((date > startPeriodDate && date < finishPeriodDate) == false) EventRejectReasons.Add("The registration period for the discipline has expired");
+
+                void SwapDate(ref DateTime start, ref DateTime finish)
+                {
+                    var tmp = finish;
+                    finish = start;
+                    start = tmp;
+                }
             }
 
-            public async Task CheckAttemptsCount(Guid disciplineKey, Guid studentKey, Contract contract, IStudentComponent logic)
+            public void CheckAttemptsCount(Guid disciplineKey, Contract contract, StudentSetting studentSetting)
             {
-                // get common limit
-                var commonLimitCount = 10;
-
                 var restriction = @event.GetRestriction(contract.EducationProgram.Key, contract.Group.Key, contract.SubGroup.Key);
                 if (restriction == default || restriction.CheckAttemps() == false) return;
 
-                var receptions = await logic.GetReceptionsWithSignedUpStudent(studentKey);
+                if (studentSetting.IsDisciplineSettingExists(disciplineKey))
+                {
+                    var signUpCount = studentSetting.GetRestSignUpCount(disciplineKey);
+                    if (signUpCount.HasValue)
+                    {
+                        if (signUpCount.Value <= 0) EventRejectReasons.Add("The number of attempts for the discipline is over");
+                    }
 
-                var filledByStudent = receptions.SelectMany(x => x.PositionManager.Positions)
-                    .Where(x => x.Record != default && x.Record.StudentKey == studentKey && x.Record.DisciplineKey == disciplineKey)
-                    .Where(x => x.Record.Result != default).ToList();
-
-                if (filledByStudent.Count() >= commonLimitCount) EventRejectReasons.Add("The number of attempts for the discipline is over");
+                    return;
+                }
             }
 
             public async Task CheckSignUpDoubles(Guid disciplineKey, Guid studentKey, IStudentComponent logic)
@@ -174,9 +199,41 @@ namespace reception.fitnesspro.ru.Controllers.Student.ViewModel
                 if (filledByStudent.Count() > 0) EventRejectReasons.Add("There is already one record on appropriate discipline");
             }
 
-            public void CheckDependencies()
+            public void CheckDependencies(Guid disciplineKey, Contract contract, IEnumerable<BaseConstraint> constraints, IEnumerable<Position> positions)
             {
+                var restriction = @event.GetRestriction(contract.EducationProgram.Key, contract.Group.Key, contract.SubGroup.Key);
+                if (restriction != default && restriction.CheckDependings() == false) return;
 
+                var dependings = @event.Requirement.DependsOnOtherDisciplines;
+
+                if (dependings == default)
+                {
+                    if (contract == default || contract.EducationProgram == default || contract.EducationProgram.Key == default)
+                        EventRejectReasons.Add("The student contract was not defined or the education program was'nt specified");
+
+                    var constraint = constraints.FirstOrDefault(x => x.ProgramKey == contract.EducationProgram.Key);
+                    if (constraint == default) constraint = constraints.FirstOrDefault();
+
+                    if (constraint != default) dependings = constraint.DependsOn?.Select(x => x.Key);
+                }
+
+                if (dependings == default) return;
+
+                var sucsesfullRates = new List<Guid>()
+                {
+                    new Guid("6367ef35-ed62-4b18-981e-10f749f5caeb"), // Зачтено
+                    new Guid("fb0a2324-061d-11e6-ab08-c8600054f636"), // Отлично
+                    new Guid("fb0a2325-061d-11e6-ab08-c8600054f636"), // Хорошо
+                    new Guid("fb0a2326-061d-11e6-ab08-c8600054f636"), // Удовл.
+                };
+
+                var results = positions.Where(x => x.Record != default)
+                    .Where(x => x.Record.Result != default)
+                    .Where(x => x.Record.DisciplineKey == disciplineKey)
+                    .Where(x => x.Record.Result.RateKey != default)
+                    .Select(x => x.Record.Result.RateKey);
+
+                if(results.Intersect(sucsesfullRates).Count() == 0) EventRejectReasons.Add("That discipline is depended on other discipline results");
             }
 
         }
